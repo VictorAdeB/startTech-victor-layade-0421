@@ -1,0 +1,12 @@
+name: Backend CI/CD
+on: [push]
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v4
+        - run: go test ./...
+        - run: docker build -t ${{ secrets.DOCKER_USER }}/starttech-api .
+        - run: docker scan ${{ secrets.DOCKER_USER }}/starttech-api
+        - run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+        - run: docker push ${{ secrets.DOCKER_USER }}/starttech-api
