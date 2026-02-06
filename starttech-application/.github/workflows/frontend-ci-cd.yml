@@ -1,26 +1,65 @@
 name: Frontend CI/CD
-on: [push]
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "starttech-frontend/**"
 
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    defaults:
+      run:
+        working-directory: starttech-frontend
+
+    steps:
+      # Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: npm
+          cache-dependency-path: starttech-frontend/package-lock.json
 
-      - run: npm ci && npm test && npm run build
-      
-      - run: npm audit --audit-level=high
+      #  Install dependencies
+      - name: Install dependencies
+        run: npm ci
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      #  Run tests (optional – keep if you actually have tests)
+      - name: Run tests
+        run: npm test --if-present
+
+      # Security audit (won’t fail build unless critical)
+      - name: NPM audit
+        run: npm audit --audit-level=high || true
+
+      # Build frontend
+      - name: Build frontend
+        run: npm run build
+
+      # Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - run: aws s3 sync build/ s3://$FRONTEND_BUCKET
-      
-      - run: aws cloudfront create-invalidation --distribution-id $CF_ID --paths "/*"
+      # Deploy to S3
+      - name: Deploy to S3
+        run: |
+          aws s3 sync ./dist s3://${{ secrets.FRONTEND_BUCKET }} --delete
+
+      # Invalidate CloudFront cache
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"

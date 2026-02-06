@@ -1,42 +1,34 @@
+# =========================
 # Stage 1: Builder
+# =========================
 FROM golang:1.25-alpine AS builder
 
-# Install build dependencies
 RUN apk add --no-cache git ca-certificates
 
-# Set working directory
 WORKDIR /app
 
-# Copy go mod and sum files first for caching
-COPY backend/go.mod backend/go.sum ./
-
-# Download dependencies
+# Copy go mod files
+COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the rest of the source code
-COPY backend/. .
+# Copy source code
+COPY . .
 
-# Build the binary with optimizations
-RUN CGO_ENABLED=0 GOOS=linux go build -o backend ./cmd/main.go
+# Build binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o app ./cmd/api/main.go
 
+# =========================
 # Stage 2: Runtime
-FROM alpine:3.18
+# =========================
+FROM alpine:3.20
 
-# Install runtime dependencies (curl for healthcheck)
 RUN apk add --no-cache ca-certificates curl
 
-# Create non-root user
-RUN adduser -D appuser
-USER appuser
-
-# Set working directory
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/backend .
+COPY --from=builder /app/app .
 
-# Expose port (match your Go app)
 EXPOSE 8080
 
-# Run the binary
-CMD ["./backend"]
+CMD ["./app"]
